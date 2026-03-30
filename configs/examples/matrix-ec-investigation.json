@@ -1,0 +1,54 @@
+{
+    "description": "Valkey 8.1-ec/9.0-ec vs Redis 8.6.2 OSS (18 io--threads) — scalability sweep (base: 256 SET + 256 GET, 1-2 x scale) on c7a.metal-48xl, NUMA-aware",
+    "dimensions": {
+        "scale": [1, 2]
+    },
+    "experiment_template": {
+        "iterations": 3,
+        "servers": [
+            {
+                "name": "redis-server-8.6.2",
+                "binary": "/home/ubuntu/valkey-bench/c7a.metal-48xl/redis-server-8.6.2",
+                "args": ["--save", "", "--appendonly", "no", "--protected-mode", "no", "--loglevel", "warning", "--io-threads", "18"]
+            },
+            {
+                "name": "valkey-8.1-ec",
+                "binary": "/home/ubuntu/valkey-bench/c7a.metal-48xl/valkey-server-ec-8.1.x",
+                "args": ["--save", "", "--appendonly", "no", "--protected-mode", "no", "--loglevel", "warning", "--amz-control-interface-ip", "127.0.0.1", "--amz-data-interface-ip", "127.0.0.1"]
+            },
+            {
+                "name": "valkey-9.0-ec",
+                "binary": "/home/ubuntu/valkey-bench/c7a.metal-48xl/valkey-server-ec-9.0.x",
+                "args": ["--save", "", "--appendonly", "no", "--protected-mode", "no", "--loglevel", "warning", "--amz-control-interface-ip", "127.0.0.1", "--amz-data-interface-ip", "127.0.0.1"]
+            }
+        ],
+        "commented_out_servers": [
+            {
+                "name": "valkey-8.1.0-ec",
+                "binary": "/home/ubuntu/valkey-bench/c7a.metal-48xl/valkey-server-ec-8.1.x",
+                "args": ["--save", "", "--appendonly", "no", "--protected-mode", "no", "--loglevel", "warning", "--amz-control-interface-ip", "127.0.0.1", "--amz-data-interface-ip", "127.0.0.1"]
+            }
+        ],
+        "servers_directory": "/tmp/valkey-bench-servers",
+        "amz_valkey_benchmark_binary": "/home/ubuntu/valkey-bench/c7a.metal-48xl/amz_valkey-benchmark",
+        "output_directory": "./results/server-matrix",
+        "experiment_duration_seconds": 15,
+        "warmup_skip_seconds": 5,
+        "port": 6379,
+        "keyspace": {
+            "key_count": 100000,
+            "data_size_bytes": 512,
+            "seed": 100000
+        },
+        "clients": {
+            "set_clients": 256,
+            "get_clients": 256,
+            "max_connections_per_benchmark_process": 24
+        },
+        "numa": {
+            "enabled": true,
+            "server_node": 0,
+            "benchmark_node": 1
+        }
+    }
+}

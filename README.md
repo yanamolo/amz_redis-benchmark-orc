@@ -296,8 +296,9 @@ The graph generator produces a self-contained HTML file with interactive Plotly.
 ## Prerequisites
 
 - **Python 3.8+** (no external dependencies)
-- **amz_valkey-benchmark** (custom Valkey benchmark tool with `--test-duration` and `--interval-metrics` support)
-- **redis-cli** (for server readiness check and FLUSHALL)
+- **redis-cli** — must be available on `PATH` (used for server readiness checks and FLUSHALL)
+- **amz_valkey-benchmark** — the benchmark load-generator binary; must be provided by the user and referenced via `amz_valkey_benchmark_binary` in the config
+- **Redis / Valkey server binaries** — the server binaries under test; must be provided by the user and referenced via `servers[].binary` in the config
 - **mpstat** (from `sysstat` package) — for CPU monitoring
 - **numactl** (optional) — for NUMA pinning
 

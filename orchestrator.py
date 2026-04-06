@@ -384,22 +384,22 @@ def start_server(server: dict, server_home: Path, port: int, numa_config: dict,
     return proc
 
 
-def _redis_cli_cmd(host: Optional[str], port: int) -> List[str]:
+def _redis_cli_cmd(host: Optional[str], port: int, cli_path: str) -> List[str]:
     """Build base redis-cli command with host and port."""
-    cmd = ["redis-cli"]
+    cmd = [cli_path]
     if host:
         cmd.extend(["-h", host])
     cmd.extend(["-p", str(port)])
     return cmd
 
 
-def wait_for_server_ready(port: int, host: Optional[str] = None,
+def wait_for_server_ready(cli_path: str, port: int, host: Optional[str] = None,
                           timeout: float = 30.0, interval: float = 0.5) -> bool:
     """Wait for the server to respond to PING."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            cmd = _redis_cli_cmd(host, port) + ["PING"]
+            cmd = _redis_cli_cmd(host, port, cli_path) + ["PING"]
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=5
             )
@@ -411,7 +411,7 @@ def wait_for_server_ready(port: int, host: Optional[str] = None,
     return False
 
 
-def validate_standalone_server(host: str, port: int):
+def validate_standalone_server(host: str, port: int, cli_path: str):
     """Validate that a remote server is reachable and running in standalone mode.
 
     Runs 'redis-cli -h <host> -p <port> INFO cluster' and checks:
@@ -420,7 +420,7 @@ def validate_standalone_server(host: str, port: int):
 
     Raises RuntimeError if validation fails.
     """
-    cmd = _redis_cli_cmd(host, port) + ["INFO", "cluster"]
+    cmd = _redis_cli_cmd(host, port, cli_path) + ["INFO", "cluster"]
     display_addr = f"{host}:{port}"
     logger.info("Validating remote server %s (standalone mode check)...", display_addr)
 
@@ -431,8 +431,6 @@ def validate_standalone_server(host: str, port: int):
             f"Remote server {display_addr} did not respond within 10s. "
             f"Check that the server is running and reachable."
         )
-    except FileNotFoundError:
-        raise RuntimeError("redis-cli not found on PATH — required for server validation")
 
     if result.returncode != 0:
         raise RuntimeError(
@@ -478,15 +476,22 @@ def stop_server(proc: subprocess.Popen, timeout: float = 10.0):
             proc._log_fh.close()
 
 
-def flush_server(port: int, host: Optional[str] = None):
+def flush_server(cli_path, port: int, host: Optional[str] = None):
     """Run FLUSHALL on the server."""
-    cmd = _redis_cli_cmd(host, port) + ["FLUSHALL"]
+    cmd = _redis_cli_cmd(host, port, cli_path) + ["FLUSHALL"]
     logger.info("Running FLUSHALL on %s:%d", host or "localhost", port)
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
     if result.returncode != 0:
         logger.warning("FLUSHALL failed: %s", result.stderr.strip() or result.stdout.strip())
     else:
         logger.info("FLUSHALL complete")
+
+def find_cli_path():
+    which_redis_cli = shutil.which("redis-cli")
+    which_valkey_cli = shutil.which("valkey-cli")
+    if which_redis_cli is None and which_valkey_cli is None:
+        raise RuntimeError("redis-cli/valkey-cli not found on PATH — required for server validation")
+    return which_redis_cli or which_valkey_cli
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1116,6 +1121,7 @@ def run_experiment(config: dict, output_root: Path):
     logger.info("=" * 70)
 
     all_aggregates = {}
+    cli_path = find_cli_path()
 
     for server in servers:
         server_name = server["name"]
@@ -1131,7 +1137,7 @@ def run_experiment(config: dict, output_root: Path):
             logger.info("")
             logger.info("Validating remote server '%s' at %s:%d...",
                         server_name, srv_host, srv_port)
-            validate_standalone_server(srv_host, srv_port)
+            validate_standalone_server(srv_host, srv_port, cli_path)
 
         iteration_summaries = []
 
@@ -1157,7 +1163,7 @@ def run_experiment(config: dict, output_root: Path):
             try:
                 if remote:
                     # Remote server: no start/stop, just validate it's still up
-                    if not wait_for_server_ready(srv_port, host=srv_host, timeout=10):
+                    if not wait_for_server_ready(cli_path, srv_port, host=srv_host, timeout=10):
                         raise RuntimeError(
                             f"Remote server {server_name} ({srv_host}:{srv_port}) "
                             f"is not responding at iteration {iteration}"
@@ -1168,14 +1174,14 @@ def run_experiment(config: dict, output_root: Path):
                     server_home = prepare_server_directory(server, servers_dir, run_id)
                     server_log = iter_dir / "server.log"
                     server_proc = start_server(server, server_home, srv_port, numa, server_log)
-                    if not wait_for_server_ready(srv_port):
+                    if not wait_for_server_ready(cli_path, srv_port):
                         raise RuntimeError(
                             f"Server {server_name} failed to start within 30s"
                         )
                     logger.info("Server ready on port %d (PID %d)", srv_port, server_proc.pid)
 
                 # Flush and pre-populate (for both local and remote)
-                flush_server(srv_port, host=srv_host)
+                flush_server(cli_path, srv_port, host=srv_host)
                 prepopulate_keys(benchmark_binary, srv_port, keyspace, numa,
                                  host=srv_host)
 

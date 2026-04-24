@@ -8,7 +8,9 @@
             "remote-server-info": {
                 "endpoint": "change.to.your.valkey.dns",
                 "port": 6379
-            }
+            },
+            "cli_args": ["Add arguments here for valkey-cli/redis-cli or empty string"],
+            "benchmark_args": ["Add arguments here for benchmark or empty string"]
         }
     ],
 
